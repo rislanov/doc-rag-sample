@@ -168,12 +168,48 @@ dmypy.json
 # Cython debug symbols
 cython_debug/
 
-# PyCharm
+# PyCharm / JetBrains IDEs
 #  JetBrains specific template is maintained in a separate JetBrains.gitignore that can
 #  be found at https://github.com/github/gitignore/blob/main/Global/JetBrains.gitignore
-#  and can be added to the global gitignore or merged into this file.  For a more nuclear
-#  option (not recommended) you can uncomment the following to ignore the entire idea folder.
-#.idea/
+.idea/
+.idea_modules/
+*.iml
+*.iws
+*.ipr
+*.user
+*.o
+*.lib
+*.a
+*.dll
+*.so
+*.dylib
+*.exe
+*.out
+*.app
+*.class
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+desktop.ini
+
+# Rider
+.idea/
+*.sln.iml
+.idea/shelf
+*.iml
+*.iws
+*.ipr
+.idea/workspace.xml
+.idea/tasks.xml
+.idea/dictionaries
+.idea/vcs.xml
+.idea/jsLibraryMappings.xml
+.idea/projectCodeStyle.xml
+.idea/modules.xml
+.idea/inspectionProfiles/
 
 # Abstra
 # Abstra is an AI-powered process automation framework.
@@ -205,3 +241,21 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+
+# .NET / C# Build results
+**/bin/
+**/obj/
+**/*.csproj.user
+**/.vs/
+**/.vscode/
+**/*.suo
+**/*.user
+**/appsettings.Development.json
+**/appsettings.*.json.local
+publish/
+*.nuget.props
+*.nuget.targets
+
+# Entity Framework migrations (local)
+**/Migrations/*.Designer.cs
+**/Migrations/[0-9]*.cs
