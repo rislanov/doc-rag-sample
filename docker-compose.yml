@@ -66,7 +66,7 @@ services:
     networks:
       - docrag-network
 
-  # Ollama Model Puller (one-time job)
+  # Ollama Model Puller (one-time job - waits for models to fully download)
   ollama-pull:
     image: curlimages/curl:latest
     container_name: docrag-ollama-pull
@@ -75,13 +75,27 @@ services:
         condition: service_healthy
     entrypoint: >
       sh -c "
+        echo '=== Ollama Model Loader ===' &&
         echo 'Waiting for Ollama to be ready...' &&
         sleep 5 &&
-        echo 'Pulling Mistral 7B model...' &&
-        curl -X POST http://ollama:11434/api/pull -d '{\"name\": \"mistral:7b-instruct\"}' &&
-        echo 'Pulling enbeddrus embedding model...' &&
-        curl -X POST http://ollama:11434/api/pull -d '{\"name\": \"evilfreelancer/enbeddrus\"}' &&
-        echo 'All models pulled successfully!'
+        
+        echo '' &&
+        echo '>>> Pulling Mistral 7B model (this may take 5-10 minutes on first run)...' &&
+        curl -sf -X POST http://ollama:11434/api/pull -d '{\"name\": \"mistral:7b-instruct\", \"stream\": false}' &&
+        echo 'Mistral 7B ready!' &&
+        
+        echo '' &&
+        echo '>>> Pulling enbeddrus embedding model...' &&
+        curl -sf -X POST http://ollama:11434/api/pull -d '{\"name\": \"evilfreelancer/enbeddrus\", \"stream\": false}' &&
+        echo 'Enbeddrus ready!' &&
+        
+        echo '' &&
+        echo '>>> Verifying models...' &&
+        curl -sf http://ollama:11434/api/tags | grep -q 'mistral' && echo 'Mistral: OK' &&
+        curl -sf http://ollama:11434/api/tags | grep -q 'enbeddrus' && echo 'Enbeddrus: OK' &&
+        
+        echo '' &&
+        echo '=== All models loaded and ready! ==='
       "
     networks:
       - docrag-network
@@ -102,6 +116,11 @@ services:
       RABBITMQ_PORT: 5672
       RABBITMQ_USER: guest
       RABBITMQ_PASSWORD: guest
+      # EasyOCR cache directory
+      EASYOCR_MODULE_PATH: /root/.EasyOCR
+    volumes:
+      # Cache EasyOCR models between restarts
+      - easyocr_models:/root/.EasyOCR
     depends_on:
       postgres:
         condition: service_healthy
@@ -169,6 +188,7 @@ volumes:
   postgres_data:
   rabbitmq_data:
   ollama_data:
+  easyocr_models:
 
 networks:
   docrag-network:

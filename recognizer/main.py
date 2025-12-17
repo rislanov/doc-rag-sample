@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """
-Recognizer Service - OCR processing worker.
+Recognizer Service - Smart document processing worker.
 
-Reads OCR requests from RabbitMQ, processes images with EasyOCR,
-saves fulltext to PostgreSQL, and publishes completion events.
+Reads OCR requests from RabbitMQ, processes documents with MarkItDown + EasyOCR,
+saves fulltext (Markdown) to PostgreSQL, and publishes completion events.
 """
 
 import logging
@@ -14,7 +14,7 @@ from datetime import datetime
 
 from config import Config
 from db import Database
-from ocr_service import OCRService
+from document_processor import DocumentProcessor, ProcessingMethod
 from rabbitmq_handler import RabbitMQHandler
 
 # Configure logging
@@ -27,13 +27,16 @@ logger = logging.getLogger(__name__)
 
 
 class RecognizerWorker:
-    """Main worker class for OCR processing."""
+    """Main worker class for document processing."""
 
     def __init__(self):
         logger.info("Initializing Recognizer Worker...")
         
         self.db = Database()
-        self.ocr = OCRService(gpu=True)
+        self.processor = DocumentProcessor(
+            ocr_languages=Config.OCR_LANGUAGES,
+            use_gpu=Config.USE_GPU
+        )
         self.rabbitmq = RabbitMQHandler()
         
         self._running = True
@@ -53,20 +56,20 @@ class RecognizerWorker:
 
     def process_ocr_request(self, message: dict):
         """
-        Process a single OCR request.
+        Process a single document request.
         
         Expected message format:
         {
             "document_id": "uuid-string",
             "client_id": "client-identifier",
             "filename": "document.pdf",
-            "image_data": "base64-encoded-image",
-            "page_number": 1  # optional
+            "image_data": "base64-encoded-file",
+            "page_number": 1  # optional, for legacy compatibility
         }
         """
         document_id = message.get("document_id")
         client_id = message.get("client_id")
-        filename = message.get("filename", "unknown")
+        filename = message.get("filename", "unknown.jpg")
         image_data = message.get("image_data")
         page_number = message.get("page_number", 1)
 
@@ -76,23 +79,34 @@ class RecognizerWorker:
             return
 
         try:
-            logger.info(f"Processing document {document_id}, page {page_number}")
+            logger.info(f"Processing document {document_id}: {filename}")
             
-            # Perform OCR
-            fulltext, details = self.ocr.recognize_from_base64(image_data)
+            # Decode file data
+            file_bytes = base64.b64decode(image_data)
             
-            # Save to database
+            # Process with smart document processor
+            result = self.processor.process_bytes(file_bytes, filename)
+            
+            logger.info(
+                f"Processed {document_id} with {result.method.value}: "
+                f"{len(result.text)} chars, {result.page_count} pages"
+            )
+            
+            # Build metadata
             metadata = {
                 "page_number": page_number,
-                "ocr_details": details,
+                "processing_method": result.method.value,
+                "page_count": result.page_count,
+                "details": result.details,
                 "processed_at": datetime.utcnow().isoformat()
             }
             
+            # Save to database (now stores Markdown-formatted text)
             db_id = self.db.save_document_fulltext(
                 document_id=document_id,
                 client_id=client_id,
                 filename=filename,
-                fulltext=fulltext,
+                fulltext=result.text,
                 metadata=metadata
             )
             
@@ -104,8 +118,9 @@ class RecognizerWorker:
                 "document_id": document_id,
                 "client_id": client_id,
                 "db_id": db_id,
-                "text_length": len(fulltext),
-                "blocks_count": len(details),
+                "text_length": len(result.text),
+                "page_count": result.page_count,
+                "processing_method": result.method.value,
                 "processed_at": datetime.utcnow().isoformat()
             })
 

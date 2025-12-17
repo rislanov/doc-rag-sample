@@ -22,8 +22,9 @@ class Config:
     OCR_REQUEST_QUEUE = os.getenv("OCR_REQUEST_QUEUE", "ocr.requests")
     OCR_RESULT_QUEUE = os.getenv("OCR_RESULT_QUEUE", "ocr.results")
 
-    # EasyOCR
+    # Document Processing
     OCR_LANGUAGES = ["ru", "en"]
+    USE_GPU = os.getenv("USE_GPU", "false").lower() in ("true", "1", "yes")
 
     @classmethod
     def get_postgres_dsn(cls) -> str:

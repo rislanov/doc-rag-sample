@@ -10,10 +10,11 @@
 ├─────────────────────────────────────────────────────────────────────┤
 │                                                                      │
 │  ┌─────────────┐      ┌────────────┐      ┌──────────────────┐      │
-│  │   Image     │──────▶│ RabbitMQ   │──────▶│   Recognizer     │      │
-│  │   Upload    │      │ (requests) │      │   (EasyOCR)      │      │
+│  │   Document  │──────▶│ RabbitMQ   │──────▶│   Recognizer     │      │
+│  │   Upload    │      │ (requests) │      │ (MarkItDown+OCR) │      │
 │  └─────────────┘      └────────────┘      └────────┬─────────┘      │
-│                                                     │                │
+│   PDF/Word/Excel                                   │                │
+│   Images/Scans                                     │ Markdown       │
 │                                                     ▼                │
 │                       ┌────────────┐      ┌──────────────────┐      │
 │                       │ RabbitMQ   │◀─────│   PostgreSQL     │      │
@@ -25,11 +26,11 @@
 │                       │ SemanticChunker  │                          │
 │                       │   (Python)       │                          │
 │                       └────────┬─────────┘                          │
-│                                │                                     │
+│                                │ + Embeddings (enbeddrus)           │
 │                                ▼                                     │
 │                       ┌──────────────────┐                          │
 │                       │   PostgreSQL     │                          │
-│                       │   (chunks)       │                          │
+│                       │ (chunks+vectors) │                          │
 │                       └──────────────────┘                          │
 │                                                                      │
 └─────────────────────────────────────────────────────────────────────┘
@@ -40,9 +41,9 @@
 │                                                                      │
 │  ┌─────────────┐      ┌──────────────────┐      ┌──────────────┐    │
 │  │   User      │──────▶│   DocRAG API     │──────▶│  PostgreSQL  │    │
-│  │   Query     │      │   (.NET 8)       │      │  (FTS search)│    │
-│  └─────────────┘      └────────┬─────────┘      └──────────────┘    │
-│                                │                                     │
+│  │   Query     │      │   (.NET 8)       │      │ Hybrid Search│    │
+│  └─────────────┘      └────────┬─────────┘      │ FTS + Vector │    │
+│                                │                 └──────────────┘    │
 │                                ▼                                     │
 │                       ┌──────────────────┐                          │
 │                       │     Ollama       │                          │
@@ -62,27 +63,32 @@
 ## Сервисы
 
 ### 1. Recognizer (Python)
-- **Технологии:** Python 3.11, EasyOCR (ru, en), RabbitMQ, PostgreSQL
+- **Технологии:** Python 3.11, MarkItDown, EasyOCR (ru, en), RabbitMQ, PostgreSQL
 - **Функции:**
-  - Читает запросы на OCR из RabbitMQ
-  - Распознает изображения с помощью EasyOCR
-  - Сохраняет fulltext в PostgreSQL
-  - Публикует события об успешном распознавании
+  - Читает запросы на обработку документов из RabbitMQ
+  - **Гибридная обработка:**
+    - MarkItDown — для цифровых файлов (Word, Excel, PDF) с сохранением структуры
+    - EasyOCR — для сканов и изображений с эвристическим восстановлением Markdown
+  - Сохраняет Markdown-форматированный текст в PostgreSQL
+  - Публикует события об успешной обработке
 
 ### 2. SemanticChunker (Python)
-- **Технологии:** Python 3.11, tiktoken, PostgreSQL, RabbitMQ
+- **Технологии:** Python 3.11, tiktoken, Ollama (enbeddrus), PostgreSQL, RabbitMQ, pgvector
 - **Функции:**
-  - Слушает события OCR из RabbitMQ
-  - Разбивает документ на семантические чанки (~500 токенов)
-  - Определяет тип чанка (contract, invoice, risk, financial, general)
-  - Сохраняет чанки в PostgreSQL для RAG
+  - Слушает события обработки документов из RabbitMQ
+  - Разбивает Markdown-документ на семантические чанки (~500 токенов)
+  - Сохраняет структуру (заголовки секций)
+  - Определяет тип чанка (passport, ndfl, contract, invoice, risk, financial и др.)
+  - **Генерирует эмбеддинги** через Ollama (enbeddrus)
+  - Сохраняет чанки + векторы в PostgreSQL (pgvector)
 
 ### 3. DocRAG API (.NET 8)
-- **Технологии:** ASP.NET Core 8, Entity Framework Core, PostgreSQL, Ollama
+- **Технологии:** ASP.NET Core 8, Entity Framework Core, PostgreSQL, pgvector, Ollama
 - **Эндпоинты:**
-  - `POST /api/search` - полнотекстовый поиск по документам
-  - `POST /api/query` - RAG Q&A с LLM
+  - `POST /api/search` - **гибридный поиск** (FTS + семантический)
+  - `POST /api/query` - RAG Q&A с LLM (Mistral 7B)
   - `GET /api/health` - проверка здоровья сервиса
+- **Поиск:** Reciprocal Rank Fusion (RRF) для объединения результатов FTS и векторного поиска
 
 ## Быстрый старт
 
