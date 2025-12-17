@@ -1,8 +1,8 @@
 # DocRAG - Document RAG System
 
-Система для OCR-распознавания документов, семантического разбиения на чанки и RAG-based вопросно-ответной системы с поддержкой русского языка.
+A system for OCR document recognition, semantic chunking, and RAG-based question answering with Russian language support.
 
-## Архитектура
+## Architecture
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
@@ -107,133 +107,133 @@
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
-## Сервисы
+## Services
 
 ### 1. Recognizer (Python)
-**Smart Document Processing с многоуровневым fallback**
+**Smart Document Processing with Multi-level Fallback**
 
-- **Технологии:** Python 3.11, MarkItDown, EasyOCR (ru, en), Ollama Vision, RabbitMQ, PostgreSQL
-- **Функции:**
-  - Читает запросы на обработку документов из RabbitMQ (`ocr.requests`)
-  - **Гибридная обработка (каскадный fallback):**
-    1. **MarkItDown** — для цифровых файлов (Word, Excel, PDF) с сохранением структуры (таблицы, заголовки)
-    2. **EasyOCR** — для сканов и изображений с эвристическим восстановлением Markdown
-    3. **Vision LLM (MiniCPM-V)** — для сложных случаев: таблицы в сканах, рукописный текст, низкая уверенность OCR (<60%)
-  - Автоопределение типа документа (passport, table, handwritten)
-  - Сохраняет Markdown-форматированный текст в PostgreSQL
-  - Публикует события в `ocr.results`
+- **Technologies:** Python 3.11, MarkItDown, EasyOCR (ru, en), Ollama Vision, RabbitMQ, PostgreSQL
+- **Functions:**
+  - Reads document processing requests from RabbitMQ (`ocr.requests`)
+  - **Hybrid Processing (Cascading Fallback):**
+    1. **MarkItDown** — for digital files (Word, Excel, PDF) preserving structure (tables, headers)
+    2. **EasyOCR** — for scans and images with heuristic Markdown reconstruction
+    3. **Vision LLM (MiniCPM-V)** — for complex cases: tables in scans, handwritten text, low OCR confidence (<60%)
+  - Auto-detection of document type (passport, table, handwritten)
+  - Saves Markdown-formatted text to PostgreSQL
+  - Publishes events to `ocr.results`
 
 ### 2. SemanticChunker (Python)
-**Semantic Document Chunking с Embeddings**
+**Semantic Document Chunking with Embeddings**
 
-- **Технологии:** Python 3.11, tiktoken, Ollama (enbeddrus), PostgreSQL, RabbitMQ, pgvector
-- **Функции:**
-  - Слушает события из `ocr.results`
-  - Разбивает Markdown-документ на семантические чанки (~500 токенов)
-  - Сохраняет структуру (заголовки секций, уровни)
-  - Определяет тип чанка (passport, ndfl, contract, invoice, risk, financial и др.)
-  - **Генерирует эмбеддинги** через Ollama (`evilfreelancer/enbeddrus` — русскоязычная модель, 768 dims)
-  - Сохраняет чанки + векторы в PostgreSQL с HNSW индексом
-  - Публикует события в `chunking.results`
+- **Technologies:** Python 3.11, tiktoken, Ollama (enbeddrus), PostgreSQL, RabbitMQ, pgvector
+- **Functions:**
+  - Listens for events from `ocr.results`
+  - Splits Markdown document into semantic chunks (~500 tokens)
+  - Preserves structure (section headers, levels)
+  - Determines chunk type (passport, ndfl, contract, invoice, risk, financial, etc.)
+  - **Generates embeddings** via Ollama (`evilfreelancer/enbeddrus` — Russian-optimized model, 768 dims)
+  - Saves chunks + vectors to PostgreSQL with HNSW index
+  - Publishes events to `chunking.results`
 
 ### 3. Reranker (Python)
-**Cross-Encoder Re-ranking для точного ранжирования**
+**Cross-Encoder Re-ranking for Precise Ranking**
 
-- **Технологии:** Python 3.11, FastAPI, sentence-transformers, BAAI/bge-reranker-v2-m3
-- **Функции:**
-  - HTTP API для re-ranking результатов поиска
-  - Использует Cross-Encoder модель (~560MB) для точного попарного сравнения query-document
-  - **10x быстрее LLM-based re-ranking** (50-200ms vs 5-10s)
-  - Поддержка 100+ языков включая русский
-  - Нормализация скоров в диапазон 0-1
-- **Эндпоинты:**
-  - `POST /rerank` — перераниживание документов
-  - `GET /health` — проверка здоровья
+- **Technologies:** Python 3.11, FastAPI, sentence-transformers, BAAI/bge-reranker-v2-m3
+- **Functions:**
+  - HTTP API for re-ranking search results
+  - Uses Cross-Encoder model (~560MB) for precise pairwise query-document comparison
+  - **10x faster than LLM-based re-ranking** (50-200ms vs 5-10s)
+  - Supports 100+ languages including Russian
+  - Normalizes scores to 0-1 range
+- **Endpoints:**
+  - `POST /rerank` — re-rank documents
+  - `GET /health` — health check
 
 ### 4. DocRAG API (.NET 8)
-**REST API для поиска и Q&A**
+**REST API for Search and Q&A**
 
-- **Технологии:** ASP.NET Core 8, Entity Framework Core, PostgreSQL, pgvector, Ollama
-- **Эндпоинты:**
-  - `POST /api/search` — **гибридный поиск** (FTS + семантический с RRF fusion)
-  - `POST /api/query` — RAG Q&A с LLM (Mistral 7B)
-  - `GET /api/health` — проверка здоровья сервиса
-- **Алгоритм поиска:**
+- **Technologies:** ASP.NET Core 8, Entity Framework Core, PostgreSQL, pgvector, Ollama
+- **Endpoints:**
+  - `POST /api/search` — **hybrid search** (FTS + semantic with RRF fusion)
+  - `POST /api/query` — RAG Q&A with LLM (Mistral 7B)
+  - `GET /api/health` — service health check
+- **Search Algorithm:**
   1. Fulltext Search (PostgreSQL tsvector, ts_rank_cd)
   2. Vector Search (pgvector, cosine similarity)
-  3. RRF Fusion (k=60) для объединения результатов
+  3. RRF Fusion (k=60) to combine results
   4. Cross-Encoder Re-ranking (top-20 → top-5)
-  5. LLM Generation с контекстом из топ чанков
+  5. LLM Generation with context from top chunks
 
-## Используемые модели
+## Models Used
 
-| Модель | Назначение | Размер | Язык |
-|--------|------------|--------|------|
-| `mistral:7b-instruct` | LLM для Q&A генерации | ~4.1GB | Multi |
-| `evilfreelancer/enbeddrus` | Эмбеддинги для семантического поиска | ~300MB | RU-optimized |
-| `minicpm-v` | Vision LLM для сложных сканов | ~3GB | Multi |
-| `BAAI/bge-reranker-v2-m3` | Cross-Encoder для re-ranking | ~560MB | 100+ langs |
+| Model | Purpose | Size | Language |
+|-------|---------|------|----------|
+| `mistral:7b-instruct` | LLM for Q&A generation | ~4.1GB | Multi |
+| `evilfreelancer/enbeddrus` | Embeddings for semantic search | ~300MB | RU-optimized |
+| `minicpm-v` | Vision LLM for complex scans | ~3GB | Multi |
+| `BAAI/bge-reranker-v2-m3` | Cross-Encoder for re-ranking | ~560MB | 100+ langs |
 
-## Быстрый старт
+## Quick Start
 
-### 1. Запуск всех сервисов
+### 1. Start All Services
 
 ```bash
-# Клонирование и запуск
+# Clone and start
 cd doc-rag-sample
 docker-compose up -d
 
-# Проверка статуса
+# Check status
 docker-compose ps
 
-# Просмотр логов
+# View logs
 docker-compose logs -f
 ```
 
-### 2. Дождаться загрузки моделей
+### 2. Wait for Model Loading
 
 ```bash
-# Проверить статус загрузки Ollama моделей
+# Check Ollama model download status
 docker logs -f docrag-ollama-pull
 
-# Проверить готовность всех моделей
+# Check readiness of all models
 curl http://localhost:11434/api/tags
 
-# Проверить Reranker
+# Check Reranker
 curl http://localhost:8001/health
 ```
 
-### 3. Проверка готовности API
+### 3. Check API Readiness
 
 ```bash
 curl http://localhost:8080/api/health
 ```
 
-## API Примеры
+## API Examples
 
-### Гибридный поиск (FTS + Vector + Rerank)
+### Hybrid Search (FTS + Vector + Rerank)
 
 ```bash
 curl -X POST http://localhost:8080/api/search \
   -H "Content-Type: application/json" \
   -d '{
-    "query": "сумма договора",
+    "query": "contract amount",
     "limit": 10
   }'
 ```
 
-**Ответ:**
+**Response:**
 ```json
 {
-  "query": "сумма договора",
+  "query": "contract amount",
   "totalResults": 5,
   "results": [
     {
       "chunkId": 1,
       "documentId": 1,
       "filename": "contract.pdf",
-      "content": "## Финансовые условия\n\nСумма договора составляет 5,000,000 рублей...",
-      "sectionHeader": "Финансовые условия",
+      "content": "## Financial Conditions\n\nThe contract amount is 5,000,000 rubles...",
+      "sectionHeader": "Financial Conditions",
       "chunkType": "contract",
       "rank": 0.9234,
       "rerankScore": 0.8912
@@ -249,20 +249,20 @@ curl -X POST http://localhost:8080/api/search \
 curl -X POST http://localhost:8080/api/query \
   -H "Content-Type: application/json" \
   -d '{
-    "query": "На какую сумму заключен договор?",
+    "query": "What is the contract amount?",
     "maxChunks": 5
   }'
 ```
 
-**Ответ:**
+**Response:**
 ```json
 {
-  "answer": "На основе документов, договор заключен на сумму 5,000,000 рублей. С учетом НДС 20% общая сумма составляет 6,000,000 рублей.",
+  "answer": "Based on the documents, the contract is concluded for the amount of 5,000,000 rubles. Including 20% VAT, the total amount is 6,000,000 rubles.",
   "confidence": 0.87,
   "sources": [
     {
       "chunkId": 1,
-      "heading": "Финансовые условия",
+      "heading": "Financial Conditions",
       "chunkType": "contract",
       "documentId": 1,
       "rerankScore": 0.8912
@@ -272,25 +272,25 @@ curl -X POST http://localhost:8080/api/query \
 }
 ```
 
-### Reranker API (напрямую)
+### Reranker API (Direct)
 
 ```bash
 curl -X POST http://localhost:8001/rerank \
   -H "Content-Type: application/json" \
   -d '{
-    "query": "сумма договора",
+    "query": "contract amount",
     "documents": [
-      {"id": "1", "content": "Договор на сумму 5 млн рублей"},
-      {"id": "2", "content": "Погода сегодня хорошая"}
+      {"id": "1", "content": "Contract for 5 million rubles"},
+      {"id": "2", "content": "The weather is nice today"}
     ],
     "top_k": 2
   }'
 ```
 
-### Отправка документа на OCR
+### Send Document for OCR
 
 ```bash
-# Отправить сообщение в RabbitMQ (через Management UI или CLI)
+# Send message to RabbitMQ (via Management UI or CLI)
 # Queue: ocr.requests
 # Message:
 {
@@ -301,55 +301,55 @@ curl -X POST http://localhost:8001/rerank \
 }
 ```
 
-## Структура БД
+## Database Structure
 
-### Таблица `documents`
-| Поле | Тип | Описание |
-|------|-----|----------|
+### Table `documents`
+| Field | Type | Description |
+|-------|------|-------------|
 | id | SERIAL | Primary key |
-| document_id | VARCHAR(255) | Уникальный ID документа |
-| filename | VARCHAR(500) | Имя файла |
-| fulltext | TEXT | Markdown-текст документа |
-| fulltext_vector | TSVECTOR | Индекс для FTS |
-| processing_method | VARCHAR(50) | Метод обработки (MARKITDOWN, EASYOCR, VISION_LLM) |
-| ocr_confidence | FLOAT | Уверенность OCR (0-1) |
-| metadata | JSONB | Метаданные |
-| created_at | TIMESTAMP | Дата создания |
+| document_id | VARCHAR(255) | Unique document ID |
+| filename | VARCHAR(500) | Filename |
+| fulltext | TEXT | Markdown text of the document |
+| fulltext_vector | TSVECTOR | Index for FTS |
+| processing_method | VARCHAR(50) | Processing method (MARKITDOWN, EASYOCR, VISION_LLM) |
+| ocr_confidence | FLOAT | OCR confidence (0-1) |
+| metadata | JSONB | Metadata |
+| created_at | TIMESTAMP | Creation date |
 
-### Таблица `chunks`
-| Поле | Тип | Описание |
-|------|-----|----------|
+### Table `chunks`
+| Field | Type | Description |
+|-------|------|-------------|
 | id | SERIAL | Primary key |
-| document_id | INTEGER | FK на documents |
-| chunk_index | INTEGER | Порядковый номер чанка |
-| content | TEXT | Текст чанка |
-| content_vector | TSVECTOR | Индекс для FTS |
-| embedding | VECTOR(768) | Вектор эмбеддинга |
-| section_header | VARCHAR(500) | Заголовок раздела |
-| heading_level | INTEGER | Уровень заголовка (1-6) |
-| chunk_type | VARCHAR(50) | Тип: contract, invoice, risk, financial, passport, general |
-| token_count | INTEGER | Количество токенов |
-| created_at | TIMESTAMP | Дата создания |
+| document_id | INTEGER | FK to documents |
+| chunk_index | INTEGER | Chunk sequence number |
+| content | TEXT | Chunk text |
+| content_vector | TSVECTOR | Index for FTS |
+| embedding | VECTOR(768) | Embedding vector |
+| section_header | VARCHAR(500) | Section header |
+| heading_level | INTEGER | Header level (1-6) |
+| chunk_type | VARCHAR(50) | Type: contract, invoice, risk, financial, passport, general |
+| token_count | INTEGER | Token count |
+| created_at | TIMESTAMP | Creation date |
 
-**Индексы:**
-- `idx_chunks_embedding` — HNSW индекс на vector (cosine distance)
-- `idx_chunks_content_fts` — GIN индекс на tsvector
-- `idx_chunks_document_id` — B-tree для JOIN
+**Indexes:**
+- `idx_chunks_embedding` — HNSW index on vector (cosine distance)
+- `idx_chunks_content_fts` — GIN index on tsvector
+- `idx_chunks_document_id` — B-tree for JOIN
 
-## Порты
+## Ports
 
-| Сервис | Порт | Описание |
-|--------|------|----------|
+| Service | Port | Description |
+|---------|------|-------------|
 | DocRAG API | 8080 | REST API (.NET) |
 | Reranker | 8001 | Re-ranking API (Python) |
-| PostgreSQL | 5432 | База данных + pgvector |
+| PostgreSQL | 5432 | Database + pgvector |
 | RabbitMQ | 5672 | AMQP |
 | RabbitMQ UI | 15672 | Management UI (guest/guest) |
 | Ollama | 11434 | LLM API |
 
-## Разработка
+## Development
 
-### Локальный запуск DocRAG API
+### Local Run: DocRAG API
 
 ```bash
 cd doc-rag
@@ -357,7 +357,7 @@ dotnet restore
 dotnet run
 ```
 
-### Локальный запуск Recognizer
+### Local Run: Recognizer
 
 ```bash
 cd recognizer
@@ -365,7 +365,7 @@ pip install -r requirements.txt
 python main.py
 ```
 
-### Локальный запуск SemanticChunker
+### Local Run: SemanticChunker
 
 ```bash
 cd semantic-chunker
@@ -373,72 +373,72 @@ pip install -r requirements.txt
 python main.py
 ```
 
-### Локальный запуск Reranker
+### Local Run: Reranker
 
 ```bash
 cd reranker
 pip install -r requirements.txt
 python main.py
-# Или с uvicorn:
+# Or with uvicorn:
 uvicorn main:app --host 0.0.0.0 --port 8000
 ```
 
-## Конфигурация
+## Configuration
 
-### Переменные окружения
+### Environment Variables
 
-| Переменная | Значение по умолчанию | Описание |
-|------------|----------------------|----------|
-| `POSTGRES_HOST` | localhost | Хост PostgreSQL |
-| `POSTGRES_PORT` | 5432 | Порт PostgreSQL |
-| `POSTGRES_DB` | docrag | Имя БД |
-| `POSTGRES_USER` | docrag | Пользователь |
-| `POSTGRES_PASSWORD` | docrag | Пароль |
-| `RABBITMQ_HOST` | localhost | Хост RabbitMQ |
-| `RABBITMQ_PORT` | 5672 | Порт RabbitMQ |
-| `OLLAMA_BASE_URL` | http://localhost:11434 | URL Ollama |
-| `OLLAMA_MODEL` | mistral:7b-instruct | Модель LLM |
-| `EMBEDDING_MODEL` | evilfreelancer/enbeddrus | Модель эмбеддингов |
-| `VISION_MODEL` | minicpm-v | Vision модель для сканов |
-| `USE_VISION_LLM` | true | Включить Vision LLM fallback |
-| `VISION_CONFIDENCE_THRESHOLD` | 0.6 | Порог уверенности OCR для Vision fallback |
-| `RERANKER_MODEL` | BAAI/bge-reranker-v2-m3 | Модель Cross-Encoder |
-| `RERANKER_ENABLED` | true | Включить re-ranking |
-| `CHUNK_SIZE` | 500 | Размер чанка в токенах |
-| `CHUNK_OVERLAP` | 50 | Перекрытие чанков |
+| Variable | Default Value | Description |
+|----------|---------------|-------------|
+| `POSTGRES_HOST` | localhost | PostgreSQL Host |
+| `POSTGRES_PORT` | 5432 | PostgreSQL Port |
+| `POSTGRES_DB` | docrag | DB Name |
+| `POSTGRES_USER` | docrag | User |
+| `POSTGRES_PASSWORD` | docrag | Password |
+| `RABBITMQ_HOST` | localhost | RabbitMQ Host |
+| `RABBITMQ_PORT` | 5672 | RabbitMQ Port |
+| `OLLAMA_BASE_URL` | http://localhost:11434 | Ollama URL |
+| `OLLAMA_MODEL` | mistral:7b-instruct | LLM Model |
+| `EMBEDDING_MODEL` | evilfreelancer/enbeddrus | Embedding Model |
+| `VISION_MODEL` | minicpm-v | Vision model for scans |
+| `USE_VISION_LLM` | true | Enable Vision LLM fallback |
+| `VISION_CONFIDENCE_THRESHOLD` | 0.6 | OCR confidence threshold for Vision fallback |
+| `RERANKER_MODEL` | BAAI/bge-reranker-v2-m3 | Cross-Encoder Model |
+| `RERANKER_ENABLED` | true | Enable re-ranking |
+| `CHUNK_SIZE` | 500 | Chunk size in tokens |
+| `CHUNK_OVERLAP` | 50 | Chunk overlap |
 
-## Требования
+## Requirements
 
 - Docker 24+
 - Docker Compose 2.0+
-- **16GB+ RAM** (рекомендуется для всех моделей)
+- **16GB+ RAM** (recommended for all models)
   - Mistral 7B: ~8GB
   - MiniCPM-V: ~3GB
   - Reranker: ~2GB
   - PostgreSQL/RabbitMQ: ~1GB
-- GPU опционально (ускорит Ollama и EasyOCR)
+- GPU optional (accelerates Ollama and EasyOCR)
 
-## Структура проекта
+## Project Structure
 
 ```
 doc-rag-sample/
-├── docker-compose.yml      # Оркестрация всех сервисов
+├── docker-compose.yml      # Orchestration of all services
 ├── db/
-│   └── init.sql            # Схема БД + pgvector + индексы
-├── recognizer/             # OCR сервис (Python)
+│   └── init.sql            # DB Schema + pgvector + indexes
+├── recognizer/             # OCR Service (Python)
 │   ├── main.py
 │   ├── document_processor.py  # MarkItDown + EasyOCR + Vision
 │   ├── vision_service.py      # Ollama Vision LLM client
 │   ├── ocr_service.py         # EasyOCR wrapper
 │   └── Dockerfile
-├── semantic-chunker/       # Chunking сервис (Python)
+├── semantic-chunker/       # Chunking Service (Python)
 │   ├── main.py
 │   ├── chunker.py
 │   └── Dockerfile
-├── reranker/               # Re-ranking сервис (Python)
+├── reranker/               # Re-ranking Service (Python)
 │   ├── main.py             # FastAPI + Cross-Encoder
 │   └── Dockerfile
-└── doc-rag/                # API сервис (.NET 8)
+└── doc-rag/                # API Service (.NET 8)
     ├── Controllers/
     ├── Services/
     │   ├── SearchService.cs    # Hybrid search + RRF
@@ -448,6 +448,6 @@ doc-rag-sample/
     └── Dockerfile
 ```
 
-## Лицензия
+## License
 
 MIT
