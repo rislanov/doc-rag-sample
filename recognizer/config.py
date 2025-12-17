@@ -25,6 +25,14 @@ class Config:
     # Document Processing
     OCR_LANGUAGES = ["ru", "en"]
     USE_GPU = os.getenv("USE_GPU", "false").lower() in ("true", "1", "yes")
+    
+    # Vision LLM (for complex scans: tables, handwritten, etc.)
+    OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
+    VISION_MODEL = os.getenv("VISION_MODEL", "minicpm-v")  # or llava:7b
+    USE_VISION_LLM = os.getenv("USE_VISION_LLM", "true").lower() in ("true", "1", "yes")
+    
+    # Vision LLM confidence threshold - use vision if OCR confidence below this
+    VISION_CONFIDENCE_THRESHOLD = float(os.getenv("VISION_CONFIDENCE_THRESHOLD", "0.6"))
 
     @classmethod
     def get_postgres_dsn(cls) -> str:

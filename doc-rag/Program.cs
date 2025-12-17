@@ -51,8 +51,17 @@ builder.Services.AddHttpClient<IEmbeddingService, OllamaEmbeddingService>(client
     client.Timeout = TimeSpan.FromSeconds(30);
 });
 
+// Configure HTTP client for Reranker service (Cross-Encoder)
+builder.Services.AddHttpClient("Reranker", client =>
+{
+    var baseUrl = builder.Configuration["Reranker:BaseUrl"] ?? "http://reranker:8000";
+    client.BaseAddress = new Uri(baseUrl);
+    client.Timeout = TimeSpan.FromSeconds(30);
+});
+
 // Register services
 builder.Services.AddScoped<ISearchService, SearchService>();
+builder.Services.AddScoped<IRerankService, RerankService>();
 builder.Services.AddScoped<IQaService, QaService>();
 
 // Configure CORS

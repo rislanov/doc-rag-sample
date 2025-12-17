@@ -90,9 +90,15 @@ services:
         echo 'Enbeddrus ready!' &&
         
         echo '' &&
+        echo '>>> Pulling MiniCPM-V vision model (for complex scans)...' &&
+        curl -sf -X POST http://ollama:11434/api/pull -d '{\"name\": \"minicpm-v\", \"stream\": false}' &&
+        echo 'MiniCPM-V ready!' &&
+        
+        echo '' &&
         echo '>>> Verifying models...' &&
         curl -sf http://ollama:11434/api/tags | grep -q 'mistral' && echo 'Mistral: OK' &&
         curl -sf http://ollama:11434/api/tags | grep -q 'enbeddrus' && echo 'Enbeddrus: OK' &&
+        curl -sf http://ollama:11434/api/tags | grep -q 'minicpm' && echo 'MiniCPM-V: OK' &&
         
         echo '' &&
         echo '=== All models loaded and ready! ==='
@@ -100,7 +106,7 @@ services:
     networks:
       - docrag-network
 
-  # Recognizer Service (OCR)
+  # Recognizer Service (OCR + Vision LLM)
   recognizer:
     build:
       context: ./recognizer
@@ -118,6 +124,11 @@ services:
       RABBITMQ_PASSWORD: guest
       # EasyOCR cache directory
       EASYOCR_MODULE_PATH: /root/.EasyOCR
+      # Vision LLM settings
+      OLLAMA_BASE_URL: http://ollama:11434
+      VISION_MODEL: minicpm-v
+      USE_VISION_LLM: "true"
+      VISION_CONFIDENCE_THRESHOLD: "0.6"
     volumes:
       # Cache EasyOCR models between restarts
       - easyocr_models:/root/.EasyOCR
@@ -126,6 +137,8 @@ services:
         condition: service_healthy
       rabbitmq:
         condition: service_healthy
+      ollama-pull:
+        condition: service_completed_successfully
     restart: unless-stopped
     networks:
       - docrag-network
@@ -173,6 +186,9 @@ services:
       Ollama__Model: mistral:7b-instruct
       Ollama__EmbeddingModel: evilfreelancer/enbeddrus
       Ollama__UseHybridSearch: "true"
+      # Reranker service
+      Reranker__BaseUrl: http://reranker:8000
+      Reranker__Enabled: "true"
     ports:
       - "8080:8080"
     depends_on:
@@ -180,6 +196,28 @@ services:
         condition: service_healthy
       ollama-pull:
         condition: service_completed_successfully
+      reranker:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - docrag-network
+
+  # Reranker Service (Cross-Encoder)
+  reranker:
+    build:
+      context: ./reranker
+      dockerfile: Dockerfile
+    container_name: docrag-reranker
+    environment:
+      RERANKER_MODEL: BAAI/bge-reranker-v2-m3
+      MAX_LENGTH: "512"
+      BATCH_SIZE: "32"
+      DEVICE: cpu
+    ports:
+      - "8001:8000"
+    volumes:
+      # Cache HuggingFace models between restarts
+      - reranker_models:/app/.cache/huggingface
     restart: unless-stopped
     networks:
       - docrag-network
@@ -189,6 +227,7 @@ volumes:
   rabbitmq_data:
   ollama_data:
   easyocr_models:
+  reranker_models:
 
 networks:
   docrag-network:

@@ -2,7 +2,7 @@
 """
 Recognizer Service - Smart document processing worker.
 
-Reads OCR requests from RabbitMQ, processes documents with MarkItDown + EasyOCR,
+Reads OCR requests from RabbitMQ, processes documents with MarkItDown + EasyOCR + Vision LLM,
 saves fulltext (Markdown) to PostgreSQL, and publishes completion events.
 """
 
@@ -35,7 +35,11 @@ class RecognizerWorker:
         self.db = Database()
         self.processor = DocumentProcessor(
             ocr_languages=Config.OCR_LANGUAGES,
-            use_gpu=Config.USE_GPU
+            use_gpu=Config.USE_GPU,
+            use_vision_llm=Config.USE_VISION_LLM,
+            ollama_base_url=Config.OLLAMA_BASE_URL,
+            vision_model=Config.VISION_MODEL,
+            vision_confidence_threshold=Config.VISION_CONFIDENCE_THRESHOLD
         )
         self.rabbitmq = RabbitMQHandler()
         
